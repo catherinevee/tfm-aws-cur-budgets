@@ -4,12 +4,22 @@ variable "name_prefix" {
   description = "Prefix to be used for resource names"
   type        = string
   default     = "finops-"
+  
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9-]*$", var.name_prefix))
+    error_message = "Name prefix can only contain alphanumeric characters and hyphens."
+  }
 }
 
 variable "environment" {
   description = "Environment name for tagging and conditional logic"
   type        = string
   default     = "dev"
+  
+  validation {
+    condition     = contains(["dev", "staging", "prod", "test"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod, test."
+  }
 }
 
 variable "tags" {
