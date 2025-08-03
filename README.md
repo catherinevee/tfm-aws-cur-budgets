@@ -2,6 +2,48 @@
 
 This Terraform module provides a comprehensive solution for managing AWS Budgets and Cost Usage Reports (CUR) for cost management and monitoring. It follows AWS best practices and includes features for budget notifications, automated actions, and detailed cost reporting.
 
+## 🗺️ Resource Map
+
+```mermaid
+graph TB
+    subgraph Cost Management Infrastructure
+        BUDGETS[AWS Budgets]
+        CUR[Cost Usage Reports]
+        S3[S3 Bucket]
+        KMS[KMS Key]
+        IAM[IAM Roles]
+        SNS[SNS Topics]
+        
+        CUR --> S3
+        S3 --> KMS
+        BUDGETS --> IAM
+        IAM --> S3
+        BUDGETS --> SNS
+    end
+
+    subgraph Security Controls
+        ENCRYPTION[Server-Side Encryption]
+        VERSIONING[Bucket Versioning]
+        ACCESS[Access Controls]
+        POLICY[Bucket Policy]
+        
+        S3 --> ENCRYPTION
+        S3 --> VERSIONING
+        S3 --> ACCESS
+        S3 --> POLICY
+    end
+
+    subgraph Monitoring & Alerts
+        NOTIFICATIONS[Budget Notifications]
+        ACTIONS[Budget Actions]
+        REPORTS[Cost Reports]
+        
+        BUDGETS --> NOTIFICATIONS
+        BUDGETS --> ACTIONS
+        CUR --> REPORTS
+    end
+```
+
 ## Features
 
 - **AWS Budgets**: Create and manage cost and usage budgets

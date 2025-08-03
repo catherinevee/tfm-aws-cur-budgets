@@ -136,6 +136,12 @@ variable "s3_bucket_force_destroy" {
   default     = false
 }
 
+variable "existing_s3_bucket_arn" {
+  description = "ARN of an existing S3 bucket to use for Cost Usage Reports (if not creating a new one)"
+  type        = string
+  default     = null
+}
+
 # IAM Configuration
 variable "create_iam_role" {
   description = "Whether to create an IAM role for budget actions"

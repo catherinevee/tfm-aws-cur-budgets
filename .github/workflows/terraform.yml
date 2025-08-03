@@ -1,0 +1,122 @@
+name: "Terraform Module CI/CD"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  TF_VERSION: "1.13.0"
+  AWS_PROVIDER_VERSION: "6.2.0"
+
+jobs:
+  validate:
+    name: "Validate"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+
+    - name: Terraform Init
+      id: init
+      run: terraform init -backend=false
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate
+
+  lint:
+    name: "Lint"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup TFLint
+      uses: terraform-linters/setup-tflint@v4
+      with:
+        tflint_version: v0.50.0
+
+    - name: Initialize TFLint
+      run: tflint --init
+      
+    - name: Run TFLint
+      run: tflint -f compact
+
+  security:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        format: sarif
+        soft_fail: true
+
+    - name: Run checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: ./
+        framework: terraform
+        soft_fail: true
+
+  test:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Run Terraform Tests
+      run: |
+        cd test
+        go test -v ./...
+
+  docs:
+    name: "Documentation"
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform Docs
+      run: |
+        curl -Lo ./terraform-docs.tar.gz https://github.com/terraform-docs/terraform-docs/releases/latest/download/terraform-docs-v0.16.0-linux-amd64.tar.gz
+        tar -xzf terraform-docs.tar.gz
+        chmod +x terraform-docs
+        mv terraform-docs /usr/local/bin/terraform-docs
+
+    - name: Run Terraform Docs
+      run: |
+        terraform-docs markdown table --output-file README.md --output-mode inject .
+
+    - name: Verify Documentation
+      run: |
+        if ! grep -q "## Requirements" README.md; then
+          echo "Missing Requirements section in README.md"
+          exit 1
+        fi
