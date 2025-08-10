@@ -1,0 +1,12 @@
+# Mock data for cost estimate violations
+# This represents cost estimates that exceed acceptable limits
+
+cost_estimate = {
+  "delta_monthly_cost": 75000.0,  # Violation: exceeds prod limit of 50000
+  "prior_monthly_cost": 10000.0,
+  "new_monthly_cost": 85000.0  # Violation: 750% increase exceeds 15% limit
+}
+
+workspace = {
+  "name": "prod-finops"
+} 

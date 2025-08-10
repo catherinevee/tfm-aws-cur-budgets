@@ -1,0 +1,371 @@
+// Policy: AWS FinOps Cost Control Policy
+// Purpose: Enforce cost controls, budget limits, and financial governance for AWS FinOps infrastructure
+// Scope: AWS Budgets, Cost Usage Reports, S3 buckets, IAM roles, and related resources
+// Enforcement: Hard Mandatory
+//
+// Validates:
+// - Monthly cost increases are within acceptable thresholds
+// - Budget configurations follow organizational standards
+// - Resource tagging for cost allocation
+// - S3 bucket lifecycle policies for cost optimization
+// - IAM role permissions follow least privilege
+// - Environment-specific cost limits
+// - Encryption requirements for cost data
+
+import "tfplan/v2" as tfplan
+import "tfstate/v2" as tfstate
+import "tfconfig/v2" as tfconfig
+import "tfrun" as tfrun
+import "strings"
+import "decimal"
+
+# Cost control parameters with secure defaults
+param max_monthly_cost_increase default 20.0
+param max_absolute_monthly_cost default 10000.0
+param environment default "dev"
+param require_cost_tags default true
+param require_encryption default true
+param max_budget_threshold default 90.0
+
+# Environment-specific cost limits
+cost_limits = {
+    "prod": {
+        "max_monthly": decimal.new(50000.0),
+        "max_increase_percent": 15.0,
+        "budget_threshold": 85.0
+    },
+    "staging": {
+        "max_monthly": decimal.new(10000.0),
+        "max_increase_percent": 25.0,
+        "budget_threshold": 90.0
+    },
+    "dev": {
+        "max_monthly": decimal.new(5000.0),
+        "max_increase_percent": 50.0,
+        "budget_threshold": 95.0
+    }
+}
+
+# Required tags for cost allocation
+mandatory_cost_tags = [
+    "Environment",
+    "Project",
+    "Owner",
+    "CostCenter",
+    "BudgetOwner"
+]
+
+# Helper function to validate cost increase
+validate_cost_increase = func(current_cost, new_cost, max_increase_percent) {
+    if current_cost is 0 {
+        return true
+    }
+    
+    increase_percent = decimal.sub(new_cost, current_cost)
+    increase_percent = decimal.div(increase_percent, current_cost)
+    increase_percent = decimal.mul(increase_percent, decimal.new(100.0))
+    
+    return decimal.less_than_or_equal_to(increase_percent, decimal.new(max_increase_percent))
+}
+
+# Helper function to validate budget configuration
+validate_budget_config = func(budget) {
+    violations = []
+    
+    # Validate budget name format
+    budget_name = budget.change.after.name else ""
+    if not strings.has_prefix(budget_name, "cost-budget-") {
+        append(violations, "Budget name must start with 'cost-budget-'")
+    }
+    
+    # Validate budget amount
+    limit_amount = budget.change.after.limit_amount else 0
+    if limit_amount <= 0 {
+        append(violations, "Budget limit amount must be greater than 0")
+    }
+    
+    # Validate budget threshold
+    notifications = budget.change.after.notification else []
+    for notifications as _, notification {
+        threshold = notification.threshold else 0
+        if threshold > max_budget_threshold {
+            append(violations, "Budget threshold cannot exceed " + string(max_budget_threshold) + "%")
+        }
+    }
+    
+    # Validate time unit
+    time_unit = budget.change.after.time_unit else ""
+    allowed_time_units = ["MONTHLY", "QUARTERLY", "ANNUALLY"]
+    if time_unit not in allowed_time_units {
+        append(violations, "Time unit must be one of: " + strings.join(allowed_time_units, ", "))
+    }
+    
+    if length(violations) > 0 {
+        print("Budget configuration violations for", budget.address + ":")
+        for violations as violation {
+            print("  -", violation)
+        }
+        return false
+    }
+    return true
+}
+
+# Helper function to validate S3 bucket cost optimization
+validate_s3_cost_optimization = func(bucket) {
+    violations = []
+    
+    # Check for lifecycle policies
+    lifecycle_rules = bucket.change.after.lifecycle_rule else []
+    if length(lifecycle_rules) == 0 {
+        append(violations, "S3 bucket requires lifecycle policies for cost optimization")
+    }
+    
+    # Check for intelligent tiering
+    intelligent_tiering_configuration = bucket.change.after.intelligent_tiering_configuration else []
+    if length(intelligent_tiering_configuration) == 0 {
+        append(violations, "S3 bucket should use intelligent tiering for cost optimization")
+    }
+    
+    # Check for versioning (cost impact)
+    versioning = bucket.change.after.versioning else []
+    if length(versioning) > 0 {
+        versioning_status = versioning[0].status else ""
+        if versioning_status is "Enabled" {
+            # Check for lifecycle policy to manage versions
+            has_version_lifecycle = false
+            for lifecycle_rules as _, rule {
+                noncurrent_version_expiration = rule.noncurrent_version_expiration else []
+                if length(noncurrent_version_expiration) > 0 {
+                    has_version_lifecycle = true
+                }
+            }
+            if not has_version_lifecycle {
+                append(violations, "Versioned S3 bucket requires lifecycle policy for noncurrent versions")
+            }
+        }
+    }
+    
+    if length(violations) > 0 {
+        print("S3 cost optimization violations for", bucket.address + ":")
+        for violations as violation {
+            print("  -", violation)
+        }
+        return false
+    }
+    return true
+}
+
+# Helper function to validate required tags
+validate_cost_tags = func(resource) {
+    if not require_cost_tags {
+        return true
+    }
+    
+    resource_tags = resource.change.after.tags else {}
+    violations = []
+    
+    for mandatory_cost_tags as tag {
+        if tag not in keys(resource_tags) {
+            append(violations, "Missing required cost tag: " + tag)
+        } else if length(resource_tags[tag] else "") == 0 {
+            append(violations, "Empty value for cost tag: " + tag)
+        }
+    }
+    
+    # Validate Environment tag matches workspace
+    if "Environment" in keys(resource_tags) {
+        env_tag = strings.to_lower(resource_tags["Environment"])
+        workspace_env = strings.to_lower(environment)
+        if env_tag != workspace_env {
+            append(violations, "Environment tag must match workspace environment")
+        }
+    }
+    
+    if length(violations) > 0 {
+        print("Cost tag violations for", resource.address + ":")
+        for violations as violation {
+            print("  -", violation)
+        }
+        return false
+    }
+    return true
+}
+
+# Helper function to validate encryption requirements
+validate_encryption = func(resource) {
+    if not require_encryption {
+        return true
+    }
+    
+    resource_type = resource.type
+    violations = []
+    
+    if resource_type is "aws_s3_bucket" {
+        encryption_config = resource.change.after.server_side_encryption_configuration else []
+        if length(encryption_config) == 0 {
+            append(violations, "S3 bucket requires server-side encryption")
+        } else {
+            # Check encryption algorithm
+            for encryption_config as _, config {
+                for config.rule else [] as _, rule {
+                    sse_algorithm = rule.apply_server_side_encryption_by_default[0].sse_algorithm else ""
+                    if sse_algorithm not in ["AES256", "aws:kms"] {
+                        append(violations, "S3 bucket must use AES256 or KMS encryption")
+                    }
+                }
+            }
+        }
+    }
+    
+    if length(violations) > 0 {
+        print("Encryption violations for", resource.address + ":")
+        for violations as violation {
+            print("  -", violation)
+        }
+        return false
+    }
+    return true
+}
+
+# Helper function to validate IAM role cost controls
+validate_iam_cost_controls = func(role) {
+    violations = []
+    
+    # Check for overly permissive policies
+    policies = role.change.after.policy else []
+    for policies as _, policy {
+        policy_document = policy.policy else ""
+        if strings.contains(policy_document, "*") and strings.contains(policy_document, "Allow") {
+            # Check if it's a reasonable wildcard policy
+            if not strings.contains(policy_document, "Condition") {
+                append(violations, "IAM policy should include conditions to limit scope")
+            }
+        }
+    }
+    
+    # Check for cost-related permissions
+    cost_permissions = [
+        "budgets:*",
+        "ce:*",
+        "cur:*",
+        "pricing:*"
+    ]
+    
+    has_cost_permissions = false
+    for policies as _, policy {
+        policy_document = policy.policy else ""
+        for cost_permissions as permission {
+            if strings.contains(policy_document, permission) {
+                has_cost_permissions = true
+            }
+        }
+    }
+    
+    if not has_cost_permissions {
+        append(violations, "FinOps IAM role should include cost management permissions")
+    }
+    
+    if length(violations) > 0 {
+        print("IAM cost control violations for", role.address + ":")
+        for violations as violation {
+            print("  -", violation)
+        }
+        return false
+    }
+    return true
+}
+
+# Filter FinOps-related resources
+finops_resources = filter tfplan.resource_changes as _, rc {
+    rc.mode is "managed" and
+    rc.type in [
+        "aws_budgets_budget",
+        "aws_budgets_budget_action",
+        "aws_cur_report_definition",
+        "aws_s3_bucket",
+        "aws_iam_role",
+        "aws_iam_role_policy"
+    ] and
+    rc.change.actions is not ["delete"]
+}
+
+# Filter S3 buckets specifically
+s3_buckets = filter tfplan.resource_changes as _, rc {
+    rc.mode is "managed" and
+    rc.type is "aws_s3_bucket" and
+    rc.change.actions is not ["delete"]
+}
+
+# Filter budgets specifically
+budgets = filter tfplan.resource_changes as _, rc {
+    rc.mode is "managed" and
+    rc.type is "aws_budgets_budget" and
+    rc.change.actions is not ["delete"]
+}
+
+# Filter IAM roles specifically
+iam_roles = filter tfplan.resource_changes as _, rc {
+    rc.mode is "managed" and
+    rc.type is "aws_iam_role" and
+    rc.change.actions is not ["delete"]
+}
+
+# Main cost control rule
+main = rule {
+    # Validate cost increase if cost estimate is available
+    (tfrun.cost_estimate.delta_monthly_cost is not null) implies (
+        decimal.less_than_or_equal_to(
+            decimal.new(tfrun.cost_estimate.delta_monthly_cost),
+            cost_limits[environment]["max_monthly"]
+        ) and
+        validate_cost_increase(
+            decimal.new(tfrun.cost_estimate.prior_monthly_cost),
+            decimal.new(tfrun.cost_estimate.new_monthly_cost),
+            cost_limits[environment]["max_increase_percent"]
+        )
+    ) and
+    
+    # Validate all FinOps resources
+    all finops_resources as _, resource {
+        validate_cost_tags(resource) and
+        validate_encryption(resource)
+    } and
+    
+    # Validate budget configurations
+    all budgets as _, budget {
+        validate_budget_config(budget)
+    } and
+    
+    # Validate S3 cost optimization
+    all s3_buckets as _, bucket {
+        validate_s3_cost_optimization(bucket)
+    } and
+    
+    # Validate IAM cost controls
+    all iam_roles as _, role {
+        validate_iam_cost_controls(role)
+    }
+}
+
+# Additional rules for specific validations
+budget_threshold_rule = rule {
+    all budgets as _, budget {
+        notifications = budget.change.after.notification else []
+        all notifications as _, notification {
+            threshold = notification.threshold else 0
+            threshold <= cost_limits[environment]["budget_threshold"]
+        }
+    }
+}
+
+encryption_rule = rule {
+    all finops_resources as _, resource {
+        validate_encryption(resource)
+    }
+}
+
+tagging_rule = rule {
+    all finops_resources as _, resource {
+        validate_cost_tags(resource)
+    }
+} 

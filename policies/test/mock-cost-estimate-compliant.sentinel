@@ -1,0 +1,12 @@
+# Mock data for compliant cost estimates
+# This represents cost estimates that are within acceptable limits
+
+cost_estimate = {
+  "delta_monthly_cost": 2500.0,
+  "prior_monthly_cost": 10000.0,
+  "new_monthly_cost": 12500.0
+}
+
+workspace = {
+  "name": "prod-finops"
+} 

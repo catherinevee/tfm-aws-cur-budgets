@@ -1,16 +1,12 @@
-# Advanced AWS Budgets and Cost Usage Reports Example
-# This example demonstrates budget actions, cost filters, and detailed cost reporting
+# Advanced AWS Budgets Example with KMS Encryption
+# This example demonstrates advanced features including KMS encryption, budget actions, and comprehensive monitoring
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.13.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.0"
+      version = "~> 6.2.0"
     }
   }
 }
@@ -19,126 +15,161 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Generate unique bucket suffix
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
+# Create KMS key for encryption (optional - you can use existing key)
+resource "aws_kms_key" "finops" {
+  description             = "KMS key for FinOps module encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Environment = "production"
+    Project     = "cost-management"
+    Owner       = "finops-team"
+  }
+}
+
+resource "aws_kms_alias" "finops" {
+  name          = "alias/finops-encryption"
+  target_key_id = aws_kms_key.finops.key_id
+}
+
+# Create SNS topic for budget notifications
+resource "aws_sns_topic" "budget_alerts" {
+  name = "budget-alerts"
+  
+  tags = {
+    Environment = "production"
+    Project     = "cost-management"
+  }
+}
+
+# Create IAM policy for budget actions
+resource "aws_iam_policy" "budget_action_policy" {
+  name        = "budget-action-policy"
+  description = "Policy for budget actions to stop/terminate resources"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:StopInstances",
+          "ec2:TerminateInstances",
+          "rds:StopDBInstance",
+          "rds:StopDBCluster",
+          "autoscaling:UpdateAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/Environment" = "dev"
+          }
+        }
+      }
+    ]
+  })
 }
 
 module "finops_advanced" {
   source = "../../"
 
   name_prefix = "advanced-example-"
-  environment = "production"
-  create_iam_role = true
-  create_cost_usage_report = true
-  create_s3_bucket = true
-
+  environment = "prod"
+  
   tags = {
     Environment = "production"
     Project     = "cost-management"
     Owner       = "finops-team"
     Example     = "advanced"
+    Security    = "high"
   }
 
   budgets = {
-    production-budget = {
-      name              = "Production Environment Budget"
+    monthly-budget = {
+      name              = "Monthly Cost Budget"
       budget_type       = "COST"
       limit_amount      = 5000
       limit_unit        = "USD"
       time_period_start = "2024-01-01_00:00"
       time_unit         = "MONTHLY"
-      cost_filters = {
-        "TagKeyValue" = ["Environment$production"]
-      }
-      cost_types = {
-        include_credit             = true
-        include_discount           = true
-        include_other_subscription = true
-        include_recurring          = true
-        include_refund             = true
-        include_subscription       = true
-        include_support            = true
-        include_tax                = true
-        include_upfront            = true
-        use_amortized              = false
-        use_blended                = false
-      }
       notifications = [
         {
           comparison_operator        = "GREATER_THAN"
           threshold                  = 80
           threshold_type             = "PERCENTAGE"
           notification_type          = "ACTUAL"
-          subscriber_email_addresses = ["finops@example.com"]
+          subscriber_sns_topic_arns  = [aws_sns_topic.budget_alerts.arn]
         },
         {
           comparison_operator        = "GREATER_THAN"
-          threshold                  = 90
+          threshold                  = 100
           threshold_type             = "PERCENTAGE"
           notification_type          = "ACTUAL"
-          subscriber_email_addresses = ["alerts@example.com"]
+          subscriber_sns_topic_arns  = [aws_sns_topic.budget_alerts.arn]
         }
       ]
     }
     
-    development-budget = {
-      name              = "Development Environment Budget"
+    quarterly-budget = {
+      name              = "Quarterly Cost Budget"
       budget_type       = "COST"
-      limit_amount      = 1000
+      limit_amount      = 15000
       limit_unit        = "USD"
       time_period_start = "2024-01-01_00:00"
-      time_unit         = "MONTHLY"
-      cost_filters = {
-        "TagKeyValue" = ["Environment$development"]
-      }
+      time_unit         = "QUARTERLY"
       notifications = [
         {
           comparison_operator        = "GREATER_THAN"
           threshold                  = 90
           threshold_type             = "PERCENTAGE"
           notification_type          = "ACTUAL"
-          subscriber_email_addresses = ["dev-team@example.com"]
+          subscriber_sns_topic_arns  = [aws_sns_topic.budget_alerts.arn]
         }
       ]
     }
   }
 
   budget_actions = {
-    production-readonly = {
-      budget_key             = "production-budget"
-      action_type            = "APPLY_IAM_POLICY"
-      notification_type      = "ACTUAL"
-      action_threshold_value = 95
-      action_threshold_type  = "PERCENTAGE"
-      policy_arn             = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-      role_arn               = module.finops_advanced.iam_role_arn
-      execution_role_arn     = module.finops_advanced.iam_role_arn
-      approval_model         = "AUTOMATIC"
+    stop-dev-resources = {
+      budget_key              = "monthly-budget"
+      action_type             = "APPLY_IAM_POLICY"
+      notification_type       = "ACTUAL"
+      action_threshold_value  = 100
+      action_threshold_type   = "PERCENTAGE"
+      policy_arn              = aws_iam_policy.budget_action_policy.arn
+      role_arn                = aws_iam_policy.budget_action_policy.arn
+      execution_role_arn      = aws_iam_policy.budget_action_policy.arn
+      approval_model          = "MANUAL"
       subscribers = [
         {
-          address           = "finops@example.com"
-          subscription_type = "EMAIL"
+          address           = aws_sns_topic.budget_alerts.arn
+          subscription_type = "SNS"
         }
       ]
     }
   }
 
-  cost_usage_report = {
-    name                    = "detailed-cost-report"
-    time_unit              = "HOURLY"
-    format                  = "Parquet"
-    compression             = "Parquet"
-    additional_schema_elements = ["RESOURCES"]
-    s3_bucket              = "example-cost-reports-${random_string.bucket_suffix.result}"
-    s3_region              = "us-east-1"
-    additional_artifacts   = ["ATHENA"]
-    report_versioning      = "OVERWRITE_REPORT"
-    refresh_closed_reports = true
-    report_frequency       = "DAILY"
-  }
+  create_cost_usage_report = true
+  create_s3_bucket        = true
+  create_iam_role         = true
+  
+  enable_kms_encryption   = true
+  kms_key_arn            = aws_kms_key.finops.arn
+}
 
-  s3_bucket_force_destroy = true
+# Outputs for the advanced example
+output "kms_key_arn" {
+  description = "ARN of the KMS key used for encryption"
+  value       = aws_kms_key.finops.arn
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for budget alerts"
+  value       = aws_sns_topic.budget_alerts.arn
+}
+
+output "budget_action_policy_arn" {
+  description = "ARN of the budget action policy"
+  value       = aws_iam_policy.budget_action_policy.arn
 } 

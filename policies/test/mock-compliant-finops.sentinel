@@ -1,0 +1,148 @@
+# Mock data for compliant FinOps resources
+# This represents properly configured resources that should pass all cost control checks
+
+resource_changes = {
+  "aws_budgets_budget.monthly": {
+    "mode": "managed",
+    "type": "aws_budgets_budget",
+    "name": "monthly",
+    "index": null,
+    "change": {
+      "actions": ["create"],
+      "before": null,
+      "after": {
+        "name": "cost-budget-monthly-production",
+        "budget_type": "COST",
+        "limit_amount": 5000.0,
+        "limit_unit": "USD",
+        "time_unit": "MONTHLY",
+        "time_period_start": "2024-01-01_00:00",
+        "notification": [
+          {
+            "comparison_operator": "GREATER_THAN",
+            "threshold": 80.0,
+            "threshold_type": "PERCENTAGE",
+            "notification_type": "ACTUAL",
+            "subscriber_email_addresses": ["finops@company.com"]
+          }
+        ],
+        "tags": {
+          "Environment": "prod",
+          "Project": "cost-management",
+          "Owner": "finops-team",
+          "CostCenter": "IT-001",
+          "BudgetOwner": "finance-team"
+        }
+      }
+    },
+    "address": "aws_budgets_budget.monthly"
+  },
+  
+  "aws_s3_bucket.cost_reports": {
+    "mode": "managed",
+    "type": "aws_s3_bucket",
+    "name": "cost_reports",
+    "index": null,
+    "change": {
+      "actions": ["create"],
+      "before": null,
+      "after": {
+        "bucket": "company-cost-reports-2024",
+        "tags": {
+          "Environment": "prod",
+          "Project": "cost-management",
+          "Owner": "finops-team",
+          "CostCenter": "IT-001",
+          "BudgetOwner": "finance-team"
+        },
+        "lifecycle_rule": [
+          {
+            "id": "cost-optimization",
+            "status": "Enabled",
+            "transition": [
+              {
+                "days": 30,
+                "storage_class": "STANDARD_IA"
+              },
+              {
+                "days": 90,
+                "storage_class": "GLACIER"
+              }
+            ],
+            "expiration": [
+              {
+                "days": 2555
+              }
+            ]
+          }
+        ],
+        "intelligent_tiering_configuration": [
+          {
+            "id": "cost-optimization-tiering",
+            "status": "Enabled"
+          }
+        ],
+        "server_side_encryption_configuration": [
+          {
+            "rule": [
+              {
+                "apply_server_side_encryption_by_default": [
+                  {
+                    "sse_algorithm": "aws:kms",
+                    "kms_master_key_id": "arn:aws:kms:us-east-1:123456789012:key/prod-finops-key"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "address": "aws_s3_bucket.cost_reports"
+  },
+  
+  "aws_iam_role.budget_action": {
+    "mode": "managed",
+    "type": "aws_iam_role",
+    "name": "budget_action",
+    "index": null,
+    "change": {
+      "actions": ["create"],
+      "before": null,
+      "after": {
+        "name": "finops-budget-action-role",
+        "tags": {
+          "Environment": "prod",
+          "Project": "cost-management",
+          "Owner": "finops-team",
+          "CostCenter": "IT-001",
+          "BudgetOwner": "finance-team"
+        },
+        "policy": [
+          {
+            "policy": jsonencode({
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "budgets:*",
+                    "ce:*",
+                    "cur:*"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "aws:RequestTag/Environment": "prod"
+                    }
+                  }
+                }
+              ]
+            })
+          }
+        ]
+      }
+    },
+    "address": "aws_iam_role.budget_action"
+  }
+} 

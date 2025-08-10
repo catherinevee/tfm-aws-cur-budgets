@@ -2,29 +2,45 @@
 
 This Terraform module provides a comprehensive solution for managing AWS Budgets and Cost Usage Reports (CUR) for cost management and monitoring. It follows AWS best practices and includes features for budget notifications, automated actions, and detailed cost reporting.
 
-## 🗺️ Resource Map
+## Resource Map
 
+This module creates the following AWS resources:
+
+### Core Resources
+- **aws_budgets_budget** - AWS Budgets for cost and usage monitoring
+- **aws_budgets_budget_action** - Automated actions triggered by budget thresholds
+- **aws_cur_report_definition** - Cost and Usage Report definitions
+- **aws_s3_bucket** - S3 bucket for storing cost reports (when `create_s3_bucket = true`)
+- **aws_iam_role** - IAM role for budget actions (when `create_iam_role = true`)
+
+### Supporting Resources
+- **aws_s3_bucket_versioning** - Enables versioning on S3 bucket
+- **aws_s3_bucket_server_side_encryption_configuration** - Configures SSE-S3 encryption
+- **aws_s3_bucket_public_access_block** - Blocks public access to S3 bucket
+- **aws_s3_bucket_policy** - IAM policy for S3 bucket access
+- **aws_iam_role_policy** - IAM policy attached to budget action role
+
+### Data Sources
+- **aws_caller_identity** - Current AWS account information
+- **aws_region** - Current AWS region information
+
+### Resource Dependencies
 ```mermaid
 graph TB
-    subgraph Cost Management Infrastructure
+    subgraph "Cost Management Infrastructure"
         BUDGETS[AWS Budgets]
         CUR[Cost Usage Reports]
         S3[S3 Bucket]
-        KMS[KMS Key]
         IAM[IAM Roles]
-        SNS[SNS Topics]
         
         CUR --> S3
-        S3 --> KMS
         BUDGETS --> IAM
-        IAM --> S3
-        BUDGETS --> SNS
     end
 
-    subgraph Security Controls
+    subgraph "Security Controls"
         ENCRYPTION[Server-Side Encryption]
         VERSIONING[Bucket Versioning]
-        ACCESS[Access Controls]
+        ACCESS[Public Access Block]
         POLICY[Bucket Policy]
         
         S3 --> ENCRYPTION
@@ -33,7 +49,7 @@ graph TB
         S3 --> POLICY
     end
 
-    subgraph Monitoring & Alerts
+    subgraph "Monitoring & Alerts"
         NOTIFICATIONS[Budget Notifications]
         ACTIONS[Budget Actions]
         REPORTS[Cost Reports]
@@ -43,6 +59,13 @@ graph TB
         CUR --> REPORTS
     end
 ```
+
+### Resource Counts
+- **Budgets**: Variable (based on `budgets` variable)
+- **Budget Actions**: Variable (based on `budget_actions` variable)
+- **S3 Bucket**: 1 (when `create_cost_usage_report = true` and `create_s3_bucket = true`)
+- **IAM Role**: 1 (when `create_iam_role = true`)
+- **Supporting Resources**: 4-5 (versioning, encryption, access controls, policies)
 
 ## Features
 
@@ -153,6 +176,8 @@ module "finops" {
   
   create_cost_usage_report = true
   create_s3_bucket        = true
+  enable_kms_encryption   = true
+  kms_key_arn            = "arn:aws:kms:us-east-1:123456789012:key/prod-finops-key"
 
   cost_usage_report = {
     name                    = "detailed-cost-report"
@@ -195,6 +220,8 @@ resource "random_string" "bucket_suffix" {
 | cost_usage_report | Configuration for Cost Usage Report | `object` | See variables.tf | no |
 | create_s3_bucket | Whether to create an S3 bucket for Cost Usage Reports | `bool` | `false` | no |
 | s3_bucket_force_destroy | Whether to force destroy the S3 bucket | `bool` | `false` | no |
+| enable_kms_encryption | Whether to use KMS encryption instead of SSE-S3 | `bool` | `false` | no |
+| kms_key_arn | ARN of the KMS key to use for S3 bucket encryption | `string` | `null` | no |
 | create_iam_role | Whether to create an IAM role for budget actions | `bool` | `false` | no |
 
 ## Outputs
@@ -213,6 +240,10 @@ resource "random_string" "bucket_suffix" {
 | iam_role_id | The ID of the IAM role for budget actions |
 | iam_role_arn | The ARN of the IAM role for budget actions |
 | iam_role_name | The name of the IAM role for budget actions |
+| s3_bucket_encryption_type | The encryption type used for the S3 bucket |
+| kms_key_arn | The ARN of the KMS key used for encryption (if enabled) |
+| budget_count | The number of budgets created |
+| budget_action_count | The number of budget actions created |
 | account_id | The AWS Account ID |
 | region | The AWS Region |
 
@@ -236,21 +267,22 @@ resource "random_string" "bucket_suffix" {
 
 | Name | Version |
 |------|---------|
-| terraform | >= 1.0 |
-| aws | >= 5.0 |
+| terraform | ~> 1.13.0 |
+| aws | ~> 6.2.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| aws | >= 5.0 |
+| aws | ~> 6.2.0 |
 
 ## Security Considerations
 
-1. **S3 Bucket Security**: The module creates S3 buckets with encryption, versioning, and public access blocking enabled
+1. **S3 Bucket Security**: The module creates S3 buckets with encryption (SSE-S3 or KMS), versioning, and public access blocking enabled
 2. **IAM Roles**: IAM roles are created with least privilege principles
 3. **Budget Actions**: Actions are configured with proper approval models and conditions
 4. **Cost Filters**: Use cost filters to scope budgets to specific resources or tags
+5. **KMS Encryption**: Optional KMS encryption for enhanced security compliance
 
 ## Best Practices
 
@@ -259,6 +291,8 @@ resource "random_string" "bucket_suffix" {
 3. **Cost Filters**: Use cost filters to create targeted budgets for different environments or projects
 4. **Monitoring**: Regularly review budget performance and adjust thresholds as needed
 5. **Documentation**: Document budget purposes and action plans for threshold breaches
+6. **Encryption**: Use KMS encryption for production environments requiring enhanced security
+7. **Validation**: Leverage the comprehensive variable validation for error prevention
 
 ## Contributing
 
@@ -277,3 +311,6 @@ This module is licensed under the MIT License. See LICENSE file for details.
 - [AWS Budgets Documentation](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-managing-costs.html)
 - [AWS Cost and Usage Reports](https://docs.aws.amazon.com/cur/latest/userguide/what-is-cur.html)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [AWS KMS Documentation](https://docs.aws.amazon.com/kms/latest/developerguide/overview.html)
+- [Security Best Practices](SECURITY.md)
+- [Cost Control Policy](policies/README.md)

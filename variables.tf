@@ -63,6 +63,19 @@ variable "budgets" {
     })))
   }))
   default = {}
+  
+  validation {
+    condition = alltrue([
+      for budget_key, budget in var.budgets : (
+        can(regex("^[a-zA-Z0-9-_]+$", budget.name)) &&
+        contains(["COST", "USAGE", "RI_UTILIZATION", "RI_COVERAGE", "SAVINGS_PLANS_UTILIZATION", "SAVINGS_PLANS_COVERAGE"], budget.budget_type) &&
+        budget.limit_amount > 0 &&
+        contains(["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "BRL", "MXN", "KRW", "ZAR"], budget.limit_unit) &&
+        contains(["DAILY", "MONTHLY", "QUARTERLY", "ANNUALLY"], budget.time_unit)
+      )
+    ])
+    error_message = "Invalid budget configuration. Check name format, budget_type, limit_amount, limit_unit, and time_unit values."
+  }
 }
 
 # Budget Actions Configuration
@@ -84,6 +97,22 @@ variable "budget_actions" {
     })))
   }))
   default = {}
+  
+  validation {
+    condition = alltrue([
+      for action_key, action in var.budget_actions : (
+        contains(["APPLY_IAM_POLICY", "APPLY_SCP_POLICY", "RUN_SSM_DOCUMENTS"], action.action_type) &&
+        contains(["ACTUAL", "FORECASTED"], action.notification_type) &&
+        action.action_threshold_value > 0 &&
+        contains(["PERCENTAGE", "ABSOLUTE_VALUE"], action.action_threshold_type) &&
+        can(regex("^arn:aws:iam::", action.policy_arn)) &&
+        can(regex("^arn:aws:iam::", action.role_arn)) &&
+        can(regex("^arn:aws:iam::", action.execution_role_arn)) &&
+        contains(["MANUAL", "AUTOMATIC"], action.approval_model)
+      )
+    ])
+    error_message = "Invalid budget action configuration. Check action_type, notification_type, threshold values, and ARN formats."
+  }
 }
 
 # Cost Usage Report Configuration
@@ -134,6 +163,23 @@ variable "s3_bucket_force_destroy" {
   description = "Whether to force destroy the S3 bucket"
   type        = bool
   default     = false
+}
+
+variable "enable_kms_encryption" {
+  description = "Whether to use KMS encryption instead of SSE-S3"
+  type        = bool
+  default     = false
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS key to use for S3 bucket encryption"
+  type        = string
+  default     = null
+  
+  validation {
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws:kms:", var.kms_key_arn))
+    error_message = "KMS key ARN must be a valid AWS KMS ARN or null."
+  }
 }
 
 variable "existing_s3_bucket_arn" {

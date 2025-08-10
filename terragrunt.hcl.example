@@ -1,0 +1,56 @@
+# Terragrunt configuration example for finops module
+# This file demonstrates how to use the finops module with Terragrunt
+
+include "root" {
+  path = find_in_parent_folders()
+}
+
+terraform {
+  source = "git::https://github.com/your-org/terraform-aws-finops.git//?ref=v1.0.0"
+}
+
+inputs = {
+  name_prefix = "prod-"
+  environment = "prod"
+  
+  tags = {
+    Environment = "production"
+    Project     = "cost-management"
+    Owner       = "finops-team"
+    ManagedBy   = "terragrunt"
+  }
+
+  budgets = {
+    monthly-budget = {
+      name              = "Monthly Cost Budget"
+      budget_type       = "COST"
+      limit_amount      = 5000
+      limit_unit        = "USD"
+      time_period_start = "2024-01-01_00:00"
+      time_unit         = "MONTHLY"
+      notifications = [
+        {
+          comparison_operator        = "GREATER_THAN"
+          threshold                  = 80
+          threshold_type             = "PERCENTAGE"
+          notification_type          = "ACTUAL"
+          subscriber_email_addresses = ["finops@company.com"]
+        },
+        {
+          comparison_operator        = "GREATER_THAN"
+          threshold                  = 100
+          threshold_type             = "PERCENTAGE"
+          notification_type          = "ACTUAL"
+          subscriber_email_addresses = ["alerts@company.com"]
+        }
+      ]
+    }
+  }
+
+  create_cost_usage_report = true
+  create_s3_bucket        = true
+  create_iam_role         = true
+  
+  enable_kms_encryption   = true
+  kms_key_arn            = "arn:aws:kms:us-east-1:123456789012:key/prod-finops-key"
+} 

@@ -76,4 +76,24 @@ output "account_id" {
 output "region" {
   description = "The AWS Region"
   value       = data.aws_region.current.name
+}
+
+output "s3_bucket_encryption_type" {
+  description = "The encryption type used for the S3 bucket"
+  value       = var.create_cost_usage_report && var.create_s3_bucket ? (var.enable_kms_encryption ? "aws:kms" : "AES256") : null
+}
+
+output "kms_key_arn" {
+  description = "The ARN of the KMS key used for encryption (if enabled)"
+  value       = var.enable_kms_encryption ? var.kms_key_arn : null
+}
+
+output "budget_count" {
+  description = "The number of budgets created"
+  value       = length(var.budgets)
+}
+
+output "budget_action_count" {
+  description = "The number of budget actions created"
+  value       = length(var.budget_actions)
 } 

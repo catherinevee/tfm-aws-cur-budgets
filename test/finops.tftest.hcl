@@ -45,3 +45,26 @@ run "validate_s3_bucket_encryption" {
     error_message = "S3 bucket encryption is not properly configured"
   }
 }
+
+run "validate_kms_encryption_when_enabled" {
+  command = plan
+
+  variables {
+    enable_kms_encryption = true
+    kms_key_arn          = "arn:aws:kms:us-east-1:123456789012:key/test-key"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_server_side_encryption_configuration.cur_bucket[0].rule[0].apply_server_side_encryption_by_default.sse_algorithm == "aws:kms"
+    error_message = "KMS encryption is not properly configured when enabled"
+  }
+}
+
+run "validate_budget_count" {
+  command = plan
+
+  assert {
+    condition     = length(aws_budgets_budget.this) == 1
+    error_message = "Expected exactly one budget to be created"
+  }
+}

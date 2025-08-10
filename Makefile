@@ -90,6 +90,25 @@ security-scan:
 		echo "terrascan not found. Install with: curl -L \"\$$(curl -s https://api.github.com/repos/tenable/terrascan/releases/latest | grep -o -E 'https://github.com/tenable/terrascan/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/terrascan_[0-9]+\.[0-9]+\.[0-9]+_Linux_x86_64.tar.gz')\" | tar -xz terrascan && sudo mv terrascan /usr/local/bin/"; \
 	fi
 
+# Run native Terraform tests
+test-native:
+	@echo "Running native Terraform tests..."
+	@cd test && terraform test
+
+# Run all tests (native + terratest)
+test-all: test-native test
+
+# Check for compliance issues (requires checkov)
+compliance-scan:
+	@if command -v checkov >/dev/null 2>&1; then \
+		checkov -d . --framework terraform; \
+	else \
+		echo "checkov not found. Install with: pip install checkov"; \
+	fi
+
+# Full validation pipeline
+validate-all: validate fmt lint security-scan compliance-scan
+
 # Documentation
 docs:
 	@echo "Generating documentation..."
