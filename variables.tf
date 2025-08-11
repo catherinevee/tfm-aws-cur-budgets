@@ -132,6 +132,7 @@ variable "cost_usage_report" {
     additional_schema_elements = list(string)
     s3_bucket              = string
     s3_region              = string
+    s3_prefix              = string
     additional_artifacts   = list(string)
     report_versioning      = string
     refresh_closed_reports = bool
@@ -145,6 +146,7 @@ variable "cost_usage_report" {
     additional_schema_elements = ["RESOURCES"]
     s3_bucket              = "my-cost-usage-reports"
     s3_region              = "us-east-1"
+    s3_prefix              = "cost-usage/"
     additional_artifacts   = ["ATHENA"]
     report_versioning      = "OVERWRITE_REPORT"
     refresh_closed_reports = true

@@ -75,7 +75,7 @@ output "account_id" {
 
 output "region" {
   description = "The AWS Region"
-  value       = data.aws_region.current.name
+  value       = data.aws_region.current.id
 }
 
 output "s3_bucket_encryption_type" {

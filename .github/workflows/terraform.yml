@@ -99,7 +99,10 @@ jobs:
 
   docs:
     name: "Documentation"
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
     - name: Checkout code
@@ -107,13 +110,22 @@ jobs:
 
     - name: Setup Terraform Docs
       run: |
-        curl -Lo terraform-docs https://github.com/terraform-docs/terraform-docs/releases/latest/download/terraform-docs-v0.16.0-linux-amd64
-        chmod +x terraform-docs
-        mv terraform-docs /usr/local/bin/terraform-docs
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          curl -Lo terraform-docs https://github.com/terraform-docs/terraform-docs/releases/latest/download/terraform-docs-v0.16.0-linux-amd64
+          chmod +x terraform-docs
+          sudo mv terraform-docs /usr/local/bin/terraform-docs
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          curl -Lo terraform-docs.exe https://github.com/terraform-docs/terraform-docs/releases/latest/download/terraform-docs-v0.16.0-windows-amd64.exe
+          mv terraform-docs.exe /usr/local/bin/terraform-docs.exe
+        fi
 
     - name: Run Terraform Docs
       run: |
-        terraform-docs markdown table --output-file README.md --output-mode inject .
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          terraform-docs markdown table --output-file README.md --output-mode inject .
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          terraform-docs.exe markdown table --output-file README.md --output-mode inject .
+        fi
 
     - name: Verify Documentation
       run: |
