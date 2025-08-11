@@ -182,11 +182,6 @@ variable "kms_key_arn" {
   }
 }
 
-variable "existing_s3_bucket_arn" {
-  description = "ARN of an existing S3 bucket to use for Cost Usage Reports (if not creating a new one)"
-  type        = string
-  default     = null
-}
 
 # IAM Configuration
 variable "create_iam_role" {

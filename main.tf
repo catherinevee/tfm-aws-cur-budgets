@@ -107,7 +107,6 @@ resource "aws_cur_report_definition" "this" {
   additional_schema_elements = var.cost_usage_report.additional_schema_elements
   s3_bucket                  = var.cost_usage_report.s3_bucket
   s3_region                  = var.cost_usage_report.s3_region
-  s3_prefix                  = var.cost_usage_report.s3_prefix
   additional_artifacts       = var.cost_usage_report.additional_artifacts
   report_versioning          = var.cost_usage_report.report_versioning
   refresh_closed_reports     = var.cost_usage_report.refresh_closed_reports
@@ -195,7 +194,7 @@ resource "aws_s3_bucket_policy" "cur_bucket" {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
           }
           StringLike = {
-            "aws:SourceArn" = "arn:aws:cur:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:definition/*"
+            "aws:SourceArn" = "arn:aws:cur:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:definition/*"
           }
         }
       }
