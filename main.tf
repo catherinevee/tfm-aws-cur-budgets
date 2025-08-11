@@ -1,3 +1,4 @@
+  s3_prefix                  = "cost-usage/"
 # AWS Budgets and Cost Usage Reports Module
 # This module creates AWS Budgets and Cost Usage Reports for cost management and monitoring
 
