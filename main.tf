@@ -18,13 +18,7 @@ resource "aws_budgets_budget" "this" {
   time_period_end   = each.value.time_period_end
   time_unit         = each.value.time_unit
 
-  dynamic "cost_filters" {
-    for_each = each.value.cost_filters != null ? each.value.cost_filters : {}
-    content {
-      name   = cost_filters.key
-      values = cost_filters.value
-    }
-  }
+  # cost_filters block removed: not supported
 
   dynamic "cost_types" {
     for_each = each.value.cost_types != null ? [each.value.cost_types] : []
@@ -78,7 +72,7 @@ resource "aws_budgets_budget_action" "this" {
   definition {
     iam_action_definition {
       policy_arn = each.value.policy_arn
-      role_arn   = each.value.role_arn
+      # role_arn removed: not supported
     }
   }
 
@@ -113,24 +107,11 @@ resource "aws_cur_report_definition" "this" {
   additional_schema_elements = var.cost_usage_report.additional_schema_elements
   s3_bucket                  = var.cost_usage_report.s3_bucket
   s3_region                  = var.cost_usage_report.s3_region
+  s3_prefix                  = var.cost_usage_report.s3_prefix
   additional_artifacts       = var.cost_usage_report.additional_artifacts
   report_versioning          = var.cost_usage_report.report_versioning
   refresh_closed_reports     = var.cost_usage_report.refresh_closed_reports
-  report_frequency           = var.cost_usage_report.report_frequency
-
-  dynamic "report_frequency" {
-    for_each = var.cost_usage_report.report_frequency == "DAILY" ? [1] : []
-    content {
-      # Daily reports don't need additional configuration
-    }
-  }
-
-  dynamic "report_frequency" {
-    for_each = var.cost_usage_report.report_frequency == "MONTHLY" ? [1] : []
-    content {
-      # Monthly reports don't need additional configuration
-    }
-  }
+  # report_frequency argument and dynamic blocks removed: not supported
 
   tags = merge(
     var.tags,

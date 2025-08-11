@@ -12,7 +12,7 @@ locals {
   )
 
   # S3 bucket configurations
-  bucket_name = var.create_s3_bucket ? "${var.name_prefix}cur-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}" : null
+  bucket_name = var.create_s3_bucket ? "${var.name_prefix}cur-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}" : null
 
   # IAM configurations
   role_name = var.create_iam_role ? "${var.name_prefix}budget-action-role" : null
